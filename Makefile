@@ -32,5 +32,8 @@ docs:
 webstart: app
 	exec erl $(ERL_ARGS)
 
+tests:
+	@./rebar eunit skip_deps=true
+
 proxystart:
 	@haproxy -f dev.haproxy.conf

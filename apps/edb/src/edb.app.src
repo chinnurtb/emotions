@@ -1,0 +1,12 @@
+{application, edb,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { edb_app, []}},
+  {env, []}
+ ]}.

@@ -76,7 +76,7 @@ create_new_user(Email, Password) ->
 
 
 to_object(User = #user{id = Id, email = Email}) ->
-	Obj = edb_obj:new(bucket(), Id, to_json(User)),
+	Obj = edb_obj:new(bucket(), list_to_binary(Id), to_json(User)),
 	edb_obj:set_index(Obj, bin, email_idx(), Email).
 
 from_object(Obj) ->
@@ -126,7 +126,6 @@ ser_deser_test() ->
 					  {created, calendar:universal_time()},
 					  {updated, calendar:universal_time()}]),
 	Obj = to_json(User),
-	file:write_file("user.json", Obj),
 	User1 = from_json(Obj),
 	?assertEqual(User, User1).
 

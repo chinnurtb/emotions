@@ -46,7 +46,7 @@ new(Email, Password) ->
 
 find_by_email(Email) ->
 	{ok, Others} = edb_db:get_by_index(bucket(), bin, email_idx(), Email),
-	lists:map(fun(K) -> {ok, U} = find(K), U end, Others).
+	lists:map(fun(K) -> {ok, U} = ?MODULE:find(K), U end, Others).
 
 store(User) ->
 	UpdatedUser = update_user(User),

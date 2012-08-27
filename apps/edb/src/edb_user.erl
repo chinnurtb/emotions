@@ -28,10 +28,10 @@ find(Key) ->
 -spec construct(PropLists :: [{term(), term()}]) -> #user{}.
 construct(PropLists) ->
 	#user{
-		id = proplists:get_value(id, PropLists, undefined),
-		email = proplists:get_value(email, PropLists, undefined),
-		pass_hash = proplists:get_value(pass_hash, PropLists, undefined),
-		pass_salt = proplists:get_value(pass_salt, PropLists, undefined),
+		id = estring:to_string(proplists:get_value(id, PropLists, undefined)),
+		email = estring:to_string(proplists:get_value(email, PropLists, undefined)),
+		pass_hash = estring:to_string(proplists:get_value(pass_hash, PropLists, undefined)),
+		pass_salt = estring:to_string(proplists:get_value(pass_salt, PropLists, undefined)),
 		created = proplists:get_value(created, PropLists, undefined),
 		updated = proplists:get_value(updated, PropLists, undefined)
 	}.
@@ -67,12 +67,12 @@ reject_if_busy(User = #user{created = C, id = Id}, UserObj, Others) ->
 
 create_new_user(Email, Password) ->
 	Salt = edb_id:new(),
-	#user { id = edb_id:new(),
-			email = Email,
-			pass_salt = Salt,
-			pass_hash = salt_and_hash_password(Password, Salt),
-			created = calendar:universal_time(),
-			updated = calendar:universal_time()}.
+	construct([{id, edb_id:new()},
+			   {email, Email},
+			   {pass_salt, Salt},
+			   {pass_hash, salt_and_hash_password(Password, Salt)},
+			   {created, calendar:universal_time()},
+			   {updated, calendar:universal_time()}]).
 
 
 to_object(User = #user{id = Id, email = Email}) ->
@@ -112,3 +112,23 @@ salt_and_hash_password(Password, Salt) ->
 	Data = list_to_binary(lists:flatten(io_lib:format("~p++SICRET++~s", [Salt, Password]))),
 	<<Number:160/integer>> = crypto:sha(Data),
 	integer_to_list(Number, 16).
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+ser_deser_test() ->
+	Salt = edb_id:new(),
+	User = construct([{id, edb_id:new()},
+					  {email, "test@example.com"},
+					  {pass_salt, Salt},
+					  {pass_hash, salt_and_hash_password("1234", Salt)},
+					  {created, calendar:universal_time()},
+					  {updated, calendar:universal_time()}]),
+	Obj = to_json(User),
+	file:write_file("user.json", Obj),
+	User1 = from_json(Obj),
+	?assertEqual(User, User1).
+
+
+-endif.

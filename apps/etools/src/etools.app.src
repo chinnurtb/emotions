@@ -1,0 +1,12 @@
+{application, etools,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { etools_app, []}},
+  {env, []}
+ ]}.

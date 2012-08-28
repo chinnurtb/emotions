@@ -38,9 +38,10 @@
 	to_json/1,
 	from_json/2,
 	validate/1,
-	get_field/2,
+	get_field_value/2,
+	get_field_errors/2,
 	set_field/3,
-	set_field/2,
+	set_fields/2,
 	text_field/1,
 	text_field/2,
 	text_field/3,
@@ -81,22 +82,27 @@ validate_fields([H = #field{name = Name} | T], Names, Fields, DubNames) ->
 		false -> validate_fields(T, [Name | Names], [H | Fields], DubNames)
 	end.
 
--spec get_field(Model :: model(), FieldName :: string()) -> term().
-get_field(Model, FieldName) ->
-	case lists:keyfind(FieldName, #field.name, Model#model.fields) of
-		false -> throw({unknown_field, Model#model.name, FieldName});
-		Field -> Field#field.value
-	end.
+-spec get_field_value(Model :: model(), FieldName :: atom()) -> term().
+get_field_value(Model, FieldName) ->
+	(get_field_record(Model, FieldName))#field.value.
+
+-spec get_field_errors(Model :: model(), FieldName ::atom()) -> [string()].
+get_field_errors(Model, FieldName) ->
+	(get_field_record(Model, FieldName))#field.errors.
 
 get_field_record(Model, FieldName) ->
-	lists:keyfind(FieldName, #field.name, Model#model.fields).
+	case lists:keyfind(FieldName, #field.name, Model#model.fields) of
+		false -> throw({unknown_field, Model#model.name, FieldName});
+		Field -> Field
+	end.
+
 
 -spec set_field(Model :: model(), FieldName :: string(), Value :: term()) -> model().
 set_field(Model, FieldName, Value) ->
-	set_field(Model, [{FieldName, Value}]).
+	set_fields(Model, [{FieldName, Value}]).
 
--spec set_field(Model :: model(), [{FieldName :: string(), Value :: term()}]) -> model().
-set_field(Model, FieldNameValueList) ->
+-spec set_fields(Model :: model(), [{FieldName :: string(), Value :: term()}]) -> model().
+set_fields(Model, FieldNameValueList) ->
 	NewFields = change_fields(Model#model.fields, FieldNameValueList, [], Model#model.name),
 	Model#model{fields = NewFields}.
 
@@ -119,7 +125,7 @@ validate(Model = #model{fields = Fiels}) ->
 	NewFields = [validate_field(Field) || Field <- Fiels],
 	WasErrors = lists:any(fun(#field{errors = L}) -> length(L) =/= 0 end, NewFields),
 	case WasErrors of
-		true -> {error, Model};
+		true -> {error, Model#model{fields = NewFields}};
 		false -> {ok, Model}
 	end.
 
@@ -138,7 +144,7 @@ to_json(Model = #model{}) ->
 from_json(Json, Model = #model{}) ->
 	{struct, PropList} = mochijson2:decode(Json),
 	FieldsVK = lists:map(fun(PI) -> field_from_json(PI, Model) end, PropList),
-	set_field(Model, FieldsVK).
+	set_fields(Model, FieldsVK).
 
 field_from_json({K, V}, Model) ->
 	FieldName = list_to_atom(binary_to_list(K)),
@@ -307,7 +313,7 @@ password_field(Name, Indexed, Validators) when is_boolean(Indexed) ->
 		name = Name,
 		type = input_password,
 		index_type = IndexType,
-		validators = [validate_type(string), validate_length({gt, 6})] ++ Validators,
+		validators = [validate_type(string)] ++ Validators,
 		transform = fun string_transform/2
 	}.
 
@@ -477,34 +483,34 @@ length_le_validate_fun(String, N) ->
 	length(String) =< N.
 
 validate_length({eq, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> length_eq_validate_fun(SA, N) end, estring:format("length not equal ~w", N));
+	validate_with(fun(SA) -> SA =:= undefined orelse length_eq_validate_fun(SA, N) end, estring:format("length not equal ~w", N));
 validate_length({in, A, B}) when is_integer(A), is_integer(B), A >= 0, B > A ->
-	validate_with(fun(SA) -> length_in_validate_fun(SA, A, B) end, estring:format("length not in [~w, ~w]", A, B));
+	validate_with(fun(SA) -> SA =:= undefined orelse length_in_validate_fun(SA, A, B) end, estring:format("length not in [~w, ~w]", A, B));
 validate_length({gt, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> length_gt_validate_fun(SA, N) end, estring:format("length less or equal then ~w", N));
+	validate_with(fun(SA) -> SA =:= undefined orelse length_gt_validate_fun(SA, N) end, estring:format("length less or equal then ~w", N));
 validate_length({ge, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> length_ge_validate_fun(SA, N) end, estring:format("length less then ~w", N));
+	validate_with(fun(SA) -> SA =:= undefined orelse length_ge_validate_fun(SA, N) end, estring:format("length less then ~w", N));
 validate_length({lt, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> length_lt_validate_fun(SA, N) end, estring:format("length greater or equal then ~w", N));
+	validate_with(fun(SA) -> SA =:= undefined orelse length_lt_validate_fun(SA, N) end, estring:format("length greater or equal then ~w", N));
 validate_length({le, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> length_le_validate_fun(SA, N) end, estring:format("length greater then ~w", N)).
+	validate_with(fun(SA) -> SA =:= undefined orelse length_le_validate_fun(SA, N) end, estring:format("length greater then ~w", N)).
 
 validate_presents() ->
 	validate_with(fun(V) -> V =/= undefined end, estring:format("should be present")).
 
 
 validate_type(integer) ->
-	validate_with(fun(V) -> is_integer(V) end, estring:format("should be integer"));
+	validate_with(fun(V) -> is_integer(V) orelse V =:= undefined end, estring:format("should be integer"));
 validate_type(float) ->
-	validate_with(fun(V) -> is_float(V) end, estring:format("should be float"));
+	validate_with(fun(V) -> is_float(V) orelse V =:= undefined end, estring:format("should be float"));
 validate_type(string) ->
-	validate_with(fun(V) -> is_list(V) end, estring:format("should be string"));
+	validate_with(fun(V) -> is_list(V) orelse V =:= undefined end, estring:format("should be string"));
 validate_type(date) ->
-	validate_with(fun(V) -> calendar:valid_date(V) end, estring:format("should be a date"));
+	validate_with(fun(V) -> V =:= undefined orelse calendar:valid_date(V)  end, estring:format("should be a date"));
 validate_type(time) ->
-	validate_with(fun(V) -> valid_time(V) end, estring:format("should be a time"));
+	validate_with(fun(V) -> V =:= undefined orelse valid_time(V) end, estring:format("should be a time"));
 validate_type(datetime) ->
-	validate_with(fun(V) -> valid_datetime(V) end, estring:format("should be a datetime")).
+	validate_with(fun(V) -> V =:= undefined orelse valid_datetime(V)  end, estring:format("should be a datetime")).
 
 valid_time({H, M, S})
 		when is_integer(H), is_integer(M), is_integer(S), 0 =< H, H =< 23, 0 =< M, M =< 59, 0 =< S, S =< 59 -> true;
@@ -514,7 +520,7 @@ valid_datetime({Date, Time}) -> calendar:valid_date(Date) andalso valid_time(Tim
 valid_datetime(_) -> false.
 
 validate_contains(Substr, Message) ->
-	validate_with(fun(V) -> string:str(V, Substr) >= 0 end, Message).
+	validate_with(fun(V) -> V =:= undefined orelse string:str(V, Substr) >= 0 end, Message).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -522,7 +528,7 @@ validate_contains(Substr, Message) ->
 
 model_to_and_from_json_test() ->
 	Model = model(test_model, [int_field(int_field), text_field(text_field)]),
-	Model1 = set_field(Model, [{int_field, 10}, {text_field, "test"}, {created, calendar:universal_time()}, {updated, calendar:universal_time()}]),
+	Model1 = set_fields(Model, [{int_field, 10}, {text_field, "test"}, {created, calendar:universal_time()}, {updated, calendar:universal_time()}]),
 	Json = to_json(Model1),
 	Model2 = from_json(Json, Model),
 	?assertEqual(Model1, Model2).
@@ -531,9 +537,9 @@ create_model_and_get_field_test_() ->
 	{setup,
 		fun() -> model(test_model, [int_field(int), text_field(text), float_field(float)]) end,
 		fun(M) -> [
-			?_assertEqual(undefined, get_field(M, int)),
-			?_assertEqual(undefined, get_field(M, text)),
-			?_assertEqual(undefined, get_field(M, float))
+			?_assertEqual(undefined, get_field_value(M, int)),
+			?_assertEqual(undefined, get_field_value(M, text)),
+			?_assertEqual(undefined, get_field_value(M, float))
 		] end
 	}.
 
@@ -541,11 +547,11 @@ create_model_set_fields_get_field_test_() ->
 	{setup,
 		fun() ->
 				M = model(test_model, [int_field(int), text_field(text), float_field(float)]),
-				set_field(M, [{int, 10}, {text, "text"}, {float, 1.0}]) end,
+				set_fields(M, [{int, 10}, {text, "text"}, {float, 1.0}]) end,
 		fun(M) -> [
-			?_assertEqual(10, get_field(M, int)),
-			?_assertEqual("text", get_field(M, text)),
-			?_assertEqual(1.0, get_field(M, float))
+			?_assertEqual(10, get_field_value(M, int)),
+			?_assertEqual("text", get_field_value(M, text)),
+			?_assertEqual(1.0, get_field_value(M, float))
 		] end
 	}.
 
@@ -557,14 +563,40 @@ create_model_single_set_fields_get_field_test_() ->
 				M2 = set_field(M1, text, "text"),
 				set_field(M2, float, 1.0) end,
 		fun(M) -> [
-			?_assertEqual(10, get_field(M, int)),
-			?_assertEqual("text", get_field(M, text)),
-			?_assertEqual(1.0, get_field(M, float))
+			?_assertEqual(10, get_field_value(M, int)),
+			?_assertEqual("text", get_field_value(M, text)),
+			?_assertEqual(1.0, get_field_value(M, float))
 		] end
 	}.
 
 unknown_field_test() ->
 	M = model(test_model, [int_field(int), text_field(text), float_field(float)]),
-	?assertThrow({unknown_field, test_model, int2}, get_field(M, int2)).
+	?assertThrow({unknown_field, test_model, int2}, get_field_value(M, int2)).
+
+validateion_default_test() ->
+	try
+	M = model(test_model, [text_field(text),
+						   int_field(int),
+						   float_field(float),
+						   email_field(email),
+						   password_field(password),
+						   date_field(date),
+						   time_field(time),
+						   datetime_field(datetime)]),
+	?assertEqual({ok, M}, validate(M))
+	catch
+		A:B -> erlang:display({A, B, erlang:get_stacktrace()})
+	end.
+
+
+validateion_2_test() ->
+	M = model(test_model, [int_field(int)]),
+	M1 = set_field(M, int, "lala"),
+	{error, M2} = validate(M1),
+	?assertEqual(1, length(get_field_errors(M2, int))).
+
+validateion_3_test() ->
+	M = model(test_model, [int_field(int, validate_presents())]),
+	?assertMatch({error, _}, validate(M)).
 
 -endif.

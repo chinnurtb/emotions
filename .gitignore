@@ -2,3 +2,4 @@ erl_crash.dump
 ebin/
 log
 .eunit
+doc

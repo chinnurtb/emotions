@@ -36,6 +36,7 @@
 	validate_contains/2,
 	model/2,
 	to_json/1,
+	from_json/2,
 	validate/1,
 	get_field/2,
 	set_field/3,
@@ -82,10 +83,13 @@ validate_fields([H = #field{name = Name} | T], Names, Fields, DubNames) ->
 
 -spec get_field(Model :: model(), FieldName :: string()) -> term().
 get_field(Model, FieldName) ->
-	case lists:keyfind(FieldName, #field.name + 1, Model#model.fields) of
+	case lists:keyfind(FieldName, #field.name, Model#model.fields) of
 		false -> throw({unknown_field, Model#model.name, FieldName});
 		Field -> Field#field.value
 	end.
+
+get_field_record(Model, FieldName) ->
+	lists:keyfind(FieldName, #field.name, Model#model.fields).
 
 -spec set_field(Model :: model(), FieldName :: string(), Value :: term()) -> model().
 set_field(Model, FieldName, Value) ->
@@ -129,6 +133,17 @@ to_json(Model = #model{}) ->
 	{ok, Model} = validate(Model),
 	JSS = {struct, lists:map(fun field_to_json/1, Model#model.fields)},
 	list_to_binary(mochijson2:encode(JSS)).
+
+-spec from_json(Json :: binary(), Model :: model()) -> {ok, model()} | no_return().
+from_json(Json, Model = #model{}) ->
+	{struct, PropList} = mochijson2:decode(Json),
+	FieldsVK = lists:map(fun(PI) -> field_from_json(PI, Model) end, PropList),
+	set_field(Model, FieldsVK).
+
+field_from_json({K, V}, Model) ->
+	FieldName = list_to_atom(binary_to_list(K)),
+	Field = get_field_record(Model, FieldName),
+	{FieldName, (Field#field.transform)(from_json, V)}.
 
 
 
@@ -505,10 +520,51 @@ validate_contains(Substr, Message) ->
 -include_lib("eunit/include/eunit.hrl").
 
 
-model_to_json_test() ->
+model_to_and_from_json_test() ->
 	Model = model(test_model, [int_field(int_field), text_field(text_field)]),
 	Model1 = set_field(Model, [{int_field, 10}, {text_field, "test"}, {created, calendar:universal_time()}, {updated, calendar:universal_time()}]),
-	file:write_file("model1.json", to_json(Model1)).
+	Json = to_json(Model1),
+	Model2 = from_json(Json, Model),
+	?assertEqual(Model1, Model2).
 
+create_model_and_get_field_test_() ->
+	{setup,
+		fun() -> model(test_model, [int_field(int), text_field(text), float_field(float)]) end,
+		fun(M) -> [
+			?_assertEqual(undefined, get_field(M, int)),
+			?_assertEqual(undefined, get_field(M, text)),
+			?_assertEqual(undefined, get_field(M, float))
+		] end
+	}.
+
+create_model_set_fields_get_field_test_() ->
+	{setup,
+		fun() ->
+				M = model(test_model, [int_field(int), text_field(text), float_field(float)]),
+				set_field(M, [{int, 10}, {text, "text"}, {float, 1.0}]) end,
+		fun(M) -> [
+			?_assertEqual(10, get_field(M, int)),
+			?_assertEqual("text", get_field(M, text)),
+			?_assertEqual(1.0, get_field(M, float))
+		] end
+	}.
+
+create_model_single_set_fields_get_field_test_() ->
+	{setup,
+		fun() ->
+				M = model(test_model, [int_field(int), text_field(text), float_field(float)]),
+				M1 = set_field(M, int, 10),
+				M2 = set_field(M1, text, "text"),
+				set_field(M2, float, 1.0) end,
+		fun(M) -> [
+			?_assertEqual(10, get_field(M, int)),
+			?_assertEqual("text", get_field(M, text)),
+			?_assertEqual(1.0, get_field(M, float))
+		] end
+	}.
+
+unknown_field_test() ->
+	M = model(test_model, [int_field(int), text_field(text), float_field(float)]),
+	?assertThrow({unknown_field, test_model, int2}, get_field(M, int2)).
 
 -endif.

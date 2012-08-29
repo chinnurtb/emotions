@@ -482,18 +482,21 @@ length_lt_validate_fun(String, N) ->
 length_le_validate_fun(String, N) ->
 	length(String) =< N.
 
+validate_p_and_str(S) ->
+	S =:= undefined orelse not is_list(S).
+
 validate_length({eq, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_eq_validate_fun(SA, N) end, estring:format("length not equal ~w", N));
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_eq_validate_fun(SA, N) end, estring:format("length not equal ~w", N));
 validate_length({in, A, B}) when is_integer(A), is_integer(B), A >= 0, B > A ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_in_validate_fun(SA, A, B) end, estring:format("length not in [~w, ~w]", A, B));
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_in_validate_fun(SA, A, B) end, estring:format("length not in [~w, ~w]", A, B));
 validate_length({gt, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_gt_validate_fun(SA, N) end, estring:format("length less or equal then ~w", N));
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_gt_validate_fun(SA, N) end, estring:format("length less or equal then ~w", N));
 validate_length({ge, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_ge_validate_fun(SA, N) end, estring:format("length less then ~w", N));
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_ge_validate_fun(SA, N) end, estring:format("length less then ~w", N));
 validate_length({lt, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_lt_validate_fun(SA, N) end, estring:format("length greater or equal then ~w", N));
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_lt_validate_fun(SA, N) end, estring:format("length greater or equal then ~w", N));
 validate_length({le, N}) when is_integer(N), N >= 0 ->
-	validate_with(fun(SA) -> SA =:= undefined orelse length_le_validate_fun(SA, N) end, estring:format("length greater then ~w", N)).
+	validate_with(fun(SA) -> validate_p_and_str(SA) orelse length_le_validate_fun(SA, N) end, estring:format("length greater then ~w", N)).
 
 validate_presents() ->
 	validate_with(fun(V) -> V =/= undefined end, estring:format("should be present")).
@@ -597,6 +600,38 @@ validateion_2_test() ->
 
 validateion_3_test() ->
 	M = model(test_model, [int_field(int, validate_presents())]),
-	?assertMatch({error, _}, validate(M)).
+	{error, M1} = validate(M),
+	?assertEqual(1, length(get_field_errors(M1, int))).
+
+length_validate_with_undefiend_and_non_string_test_() -> [
+		?_assertEqual(ok, (validate_length({eq, 10}))(undefiend)),
+		?_assertEqual(ok, (validate_length({eq, 10}))(10)),
+		?_assertEqual(ok, (validate_length({in, 1, 10}))(undefined)),
+		?_assertEqual(ok, (validate_length({in, 1, 10}))(atom)),
+		?_assertEqual(ok, (validate_length({gt, 1}))(undefiend)),
+		?_assertEqual(ok, (validate_length({gt, 10}))(1.0)),
+		?_assertEqual(ok, (validate_length({ge, 10}))(undefined)),
+		?_assertEqual(ok, (validate_length({ge, 10}))({some, tuple})),
+		?_assertEqual(ok, (validate_length({lt, 1}))(undefiend)),
+		?_assertEqual(ok, (validate_length({lt, 10}))(1.0)),
+		?_assertEqual(ok, (validate_length({le, 10}))(undefined)),
+		?_assertEqual(ok, (validate_length({le, 10}))({some, tuple}))
+	].
+
+length_validate_test_() -> [
+		?_assertMatch(ok, (validate_length({eq, 10}))("aaaaaaaaaa")),
+		?_assertMatch({error, _}, (validate_length({eq, 10}))("aaaaa")),
+		?_assertMatch(ok, (validate_length({in, 3, 10}))("aaaa")),
+		?_assertMatch({error, _}, (validate_length({in, 3, 10}))("aa")),
+		?_assertMatch({error, _}, (validate_length({in, 3, 10}))("aaaaaaaaaaa")),
+		?_assertMatch(ok, (validate_length({gt, 5}))("aaaaaa")),
+		?_assertMatch({error, _}, (validate_length({gt, 5}))("aaaaa")),
+		?_assertMatch(ok, (validate_length({ge, 5}))("aaaaa")),
+		?_assertMatch({error, _}, (validate_length({ge, 5}))("aaaa")),
+		?_assertMatch(ok, (validate_length({lt, 5}))("aaa")),
+		?_assertMatch({error, _}, (validate_length({lt, 5}))("aaaaa")),
+		?_assertMatch(ok, (validate_length({le, 5}))("aaaaa")),
+		?_assertMatch({error, _}, (validate_length({le, 5}))("aaaaaa"))
+	].
 
 -endif.

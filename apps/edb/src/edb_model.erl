@@ -134,6 +134,24 @@ validate_field(F = #field{value = Value, validators = ValidatorFuns}) ->
 	Errors = lists:foldl(fun(ok, Acc) -> Acc; ({error, M}, Acc) -> [M|Acc] end, [], ValidatesResults),
 	F#field{errors = Errors}.
 
+
+bucket(Model) ->
+	list_to_binary(estring:to_string(Model#model.name)).
+
+id(Model) ->
+	list_to_binary(get_field_value(Model, id)).
+
+to_db_object(Model) ->
+	Obj = edb_obj:new(bucket(Model), id(Model), to_json(Model)),
+	set_indexes(Obj, Model#model.fields).
+
+set_indexes(Obj, Fields) ->
+	lists:foldl(fun set_field_index/2, Obj, Fields).
+
+set_field_index(#field{index_type = undefined}, Obj) -> Obj;
+set_field_index(#field{index_type = Type, value = Value, name = Name}, Obj) ->
+	edb_obj:set_index(Obj, Type, Name, Value).
+
 -spec to_json(Model :: model()) -> string().
 to_json(Model = #model{}) ->
 	{ok, Model} = validate(Model),

@@ -37,6 +37,8 @@
 	model/2,
 	to_json/1,
 	from_json/2,
+	save/1,
+	find/2,
 	validate/1,
 	get_field_value/2,
 	get_field_errors/2,
@@ -120,6 +122,9 @@ change_fields([Field | Tail], FVPL, Result, ModelName) ->
 									   ModelName)
 	end.
 
+bucket(Model) ->
+	list_to_binary(estring:to_string(Model#model.name)).
+
 -spec validate(Model :: model()) -> {ok, Model} | {error, Model}.
 validate(Model = #model{fields = Fiels}) ->
 	NewFields = [validate_field(Field) || Field <- Fiels],
@@ -134,9 +139,46 @@ validate_field(F = #field{value = Value, validators = ValidatorFuns}) ->
 	Errors = lists:foldl(fun(ok, Acc) -> Acc; ({error, M}, Acc) -> [M|Acc] end, [], ValidatesResults),
 	F#field{errors = Errors}.
 
+-spec find(Id :: string(), Model :: model()) -> {ok, model()} | {error, term()}.
+find(Id, Model) ->
+	Key = list_to_binary(Id),
+	R = edb_db:fetch(bucket(Model), Key),
+	case R of
+		{error, _} -> R;
+		{ok, Obj} -> {ok, from_db_object(Obj, Model)}
+	end.
 
-bucket(Model) ->
-	list_to_binary(estring:to_string(Model#model.name)).
+
+-spec save(Model :: model()) -> {ok, model()} | {error, term()}.
+save(Model) ->
+	UpdatedModel = update_model(Model),
+	VR = validate(UpdatedModel),
+	case VR of
+		{error, ModelWithErrors} -> {error, {validation_fail, ModelWithErrors}};
+		{ok, UpdatedModel} -> save_and_check_uniques(to_db_object(UpdatedModel), Model, UpdatedModel)
+	end.
+
+update_model(Model) ->
+	set_field(Model, updated, calendar:universal_time()).
+
+save_and_check_uniques(Object, Model, UpdatedModel) ->
+	SR = edb_db:store(Object),
+	case SR of
+		{error, _} -> SR;
+		{ok, Object} -> check_uniques(Model, UpdatedModel)
+	end.
+
+check_uniques(Model, UpdatedModel) ->
+	UniqFields = get_unique_fields(UpdatedModel#model.fields),
+	Bucket = bucket(Model),
+	Indexed = lists:map(fun(#field{name = Name, index_type = Type, value = Value}) ->
+				edb_db:get_by_index(Bucket, Type, Name, Value) end, UniqFields),
+	Models =
+
+
+get_unique_fields(Fields) ->
+	lists:filter(fun(#field{unique = U}) -> U end, Fields).
+
 
 id(Model) ->
 	list_to_binary(get_field_value(Model, id)).
@@ -144,6 +186,10 @@ id(Model) ->
 to_db_object(Model) ->
 	Obj = edb_obj:new(bucket(Model), id(Model), to_json(Model)),
 	set_indexes(Obj, Model#model.fields).
+
+from_db_object(Object, Model) ->
+	Value = edb_obj:get_value(Object),
+	from_json(Value, Model).
 
 set_indexes(Obj, Fields) ->
 	lists:foldl(fun set_field_index/2, Obj, Fields).

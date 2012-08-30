@@ -1,4 +1,4 @@
--module(libdb_text_field_impl, [Name, Indexed, Validators]).
+-module(libdb_text_field_impl, [Name, Indexed, Validators, DefaultValue]).
 
 -behavior(libdb_field).
 
@@ -11,7 +11,8 @@
 	is_unique/0,
 	is_indexed/0,
 	validate/1,
-	name/0
+	name/0,
+	default_value/0
 ]).
 
 -spec to_html(Value :: string()) -> string().
@@ -46,6 +47,8 @@ validate(Value) ->
 -spec name() -> atom().
 name() -> Name.
 
+-spec default_value() -> string().
+default_value() -> DefaultValue.
 
 is_indexed(false) -> false;
 is_indexed(_) -> true.

@@ -1,7 +1,7 @@
 -module(libdb_field).
 
 -type value() :: term().
--type index_type() :: int | bin | none.
+-type index_type() :: int | bin.
 -type validate_fun() :: fun((value()) -> ok | {error, string()}).
 
 -export_type([
@@ -19,4 +19,5 @@
 -callback is_unique() -> boolean().
 -callback validate(Value :: value()) -> ok | {error, [string()]}.
 -callback name() -> atom().
+-callback default_value() -> value().
 

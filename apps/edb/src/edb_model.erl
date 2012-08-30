@@ -171,9 +171,8 @@ save_and_check_uniques(Object, Model, UpdatedModel) ->
 check_uniques(Model, UpdatedModel) ->
 	UniqFields = get_unique_fields(UpdatedModel#model.fields),
 	Bucket = bucket(Model),
-	Indexed = lists:map(fun(#field{name = Name, index_type = Type, value = Value}) ->
-				edb_db:get_by_index(Bucket, Type, Name, Value) end, UniqFields),
-	Models =
+	_Indexed = lists:map(fun(#field{name = Name, index_type = Type, value = Value}) ->
+				edb_db:get_by_index(Bucket, Type, Name, Value) end, UniqFields).
 
 
 get_unique_fields(Fields) ->
